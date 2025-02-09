@@ -31,9 +31,7 @@ func main() {
 	)
 
 	// Setup zerolog
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	logger := log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	if err := ff.Parse(flag.CommandLine, os.Args[1:], ff.WithEnvVars()); err != nil {
 		log.Fatal().Err(err).Msg("Error parsing flags")
@@ -63,7 +61,7 @@ func main() {
 		missingFlags = append(missingFlags, "authentication method (one of: snowflake.password, snowflake.private.key.file, or snowflake.authenticator)")
 	}
 	if authMethodCount > 1 {
-		logger.Fatal().
+		log.Fatal().
 			Bool("password_provided", *snowflakePassword != "").
 			Bool("private_key_provided", *snowflakePrivateKeyFile != "").
 			Bool("authenticator_provided", *snowflakeAuthenticator != "").
@@ -71,12 +69,12 @@ func main() {
 	}
 
 	if len(missingFlags) > 0 {
-		logger.Fatal().Msg("Missing required flags: " + strings.Join(missingFlags, ", "))
+		log.Fatal().Msg("Missing required flags: " + strings.Join(missingFlags, ", "))
 	}
 
 	// Create context that's cancelled when the program receives a SIGINT
 	ctx := context.Background()
-	ctx, cancel := signalHandlerContext(ctx, &logger)
+	ctx, cancel := signalHandlerContext(ctx)
 	defer cancel()
 
 	// need to convert private key to correct format if provided
@@ -95,12 +93,12 @@ func main() {
 			pemutil.WithPassword([]byte(*snowflakePrivateKeyPasscode)),
 		)
 		if err != nil {
-			logger.Fatal().Err(err).Msg("Failed parsing private key!")
+			log.Fatal().Err(err).Msg("Failed parsing private key!")
 		}
 
 		rsaKey, ok = key.(*rsa.PrivateKey)
 		if !ok {
-			logger.Fatal().Msg("Type assertion to *rsa.PrivateKey failed!")
+			log.Fatal().Msg("Type assertion to *rsa.PrivateKey failed!")
 		}
 	}
 
@@ -121,19 +119,19 @@ func main() {
 	} else if *snowflakeAuthenticator == "externalbrowser" {
 		cfg.Authenticator = gosnowflake.AuthTypeExternalBrowser
 	} else {
-		logger.Fatal().
+		log.Fatal().
 			Str("authenticator", *snowflakeAuthenticator).
 			Msg("Invalid authenticator")
 	}
 
 	dsn, err := gosnowflake.DSN(&cfg)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to create DSN from config")
+		log.Fatal().Err(err).Msg("Failed to create DSN from config")
 	}
 
 	db, err := sql.Open("snowflake", dsn)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Error connecting to snowflake")
+		log.Fatal().Err(err).Msg("Error connecting to snowflake")
 	}
 	defer db.Close()
 
@@ -143,7 +141,7 @@ func main() {
 	`
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed querying snowflake!")
+		log.Fatal().Err(err).Msg("Failed querying snowflake!")
 	}
 	// Do whatever you want with rows, for this example we'll just loop over
 	// them and increment a count.
@@ -155,23 +153,23 @@ func main() {
 		if err := rows.Scan(
 			columns you want to scan
 		); err != nil {
-			logger.Fatal().Err(err).Msg("Error scanning rows!")
+			log.Fatal().Err(err).Msg("Error scanning rows!")
 		*/
 	}
 
 	if err := rows.Err(); err != nil {
-		logger.Fatal().Err(err).Msg("Error calling rows.Err!")
+		log.Fatal().Err(err).Msg("Error calling rows.Err!")
 	}
 
 	if err := rows.Close(); err != nil {
-		logger.Fatal().Err(err).Msg("Error calling rows.Close!")
+		log.Fatal().Err(err).Msg("Error calling rows.Close!")
 	}
 
 	// Log our count and exit
-	logger.Info().Int("count", count).Msg("Successfully pulled results from snowflake")
+	log.Info().Int("count", count).Msg("Successfully pulled results from snowflake")
 }
 
-func signalHandlerContext(ctx context.Context, logger *zerolog.Logger) (context.Context, func()) {
+func signalHandlerContext(ctx context.Context) (context.Context, func()) {
 	ctx, cancel := context.WithCancel(ctx)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt)
@@ -188,7 +186,7 @@ func signalHandlerContext(ctx context.Context, logger *zerolog.Logger) (context.
 
 		select {
 		case sig := <-sigs:
-			logger.Info().
+			log.Info().
 				Str("signal", sig.String()).
 				Msg("Caught signal")
 			cancel()
