@@ -1,6 +1,6 @@
 package main
 
-// copied from https://github.com/DavidBrown-niche/gosnowflake-example/tree/0bcc7a5
+// adapted from https://github.com/DavidBrown-niche/gosnowflake-example/tree/0bcc7a5
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/peterbourgon/ff/v3"
 	"github.com/snowflakedb/gosnowflake"
@@ -26,35 +27,53 @@ func main() {
 		snowflakePassword           = flag.String("snowflake.password", "", "Password for snowflake. Cannot be used in conjunction with snowflake.private.key.file")
 		snowflakePrivateKeyFile     = flag.String("snowflake.private.key.file", "", "Location of private key file used to authenticate with snowflake, pkcs8 in PEM format. Cannot be used in conjunction with snowflake.password")
 		snowflakePrivateKeyPasscode = flag.String("snowflake.private.key.passcode", "", "Passcode for encrypted private key (not necessary if key is not encrypted)")
+		snowflakeAuthenticator      = flag.String("snowflake.authenticator", "", "Authenticator type for snowflake (one of: externalbrowser)")
 	)
 
 	if err := ff.Parse(flag.CommandLine, os.Args[1:], ff.WithEnvVars()); err != nil {
 		log.Fatalf("Error parsing flags: %s", err)
 	}
 
-	// Create example logger:
-	logger := zap.NewExample()
-
+	// Create a development logger with human-readable output
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatalf("Failed to create logger: %v", err)
+	}
 	defer logger.Sync()
 
 	// Check flags
+	var missingFlags []string
 	if *snowflakeAccount == "" {
-		logger.Fatal("Missing required flag snowflake.account")
-	}
-	if *snowflakeDatabase == "" {
-		logger.Fatal("Missing required flag snowflake.database")
-	}
-	if *snowflakeSchema == "" {
-		logger.Fatal("Missing required flag snowflake.schema")
+		missingFlags = append(missingFlags, "snowflake.account")
 	}
 	if *snowflakeUser == "" {
-		logger.Fatal("Missing required flag snowflake.user")
+		missingFlags = append(missingFlags, "snowflake.user")
 	}
-	if *snowflakePassword == "" && *snowflakePrivateKeyFile == "" {
-		logger.Fatal("Must provide exactly one of: snowflake.password OR snowflake.private.key.file, neither provided")
+
+	// Check authentication method
+	authMethodCount := 0
+	if *snowflakePassword != "" {
+		authMethodCount++
 	}
-	if *snowflakePassword != "" && *snowflakePrivateKeyFile != "" {
-		logger.Fatal("Must provide exactly one of: snowflake.password OR snowflake.private.key.file, both provided")
+	if *snowflakePrivateKeyFile != "" {
+		authMethodCount++
+	}
+	if *snowflakeAuthenticator != "" {
+		authMethodCount++
+	}
+	if authMethodCount == 0 {
+		missingFlags = append(missingFlags, "authentication method (one of: snowflake.password, snowflake.private.key.file, or snowflake.authenticator)")
+	}
+	if authMethodCount > 1 {
+		logger.Fatal("Must provide exactly one authentication method",
+			zap.Bool("password_provided", *snowflakePassword != ""),
+			zap.Bool("private_key_provided", *snowflakePrivateKeyFile != ""),
+			zap.Bool("authenticator_provided", *snowflakeAuthenticator != ""),
+		)
+	}
+
+	if len(missingFlags) > 0 {
+		logger.Fatal("Missing required flags: " + strings.Join(missingFlags, ", "))
 	}
 
 	// Create context that's cancelled when the program receives a SIGINT
@@ -93,13 +112,20 @@ func main() {
 		Database: *snowflakeDatabase,
 		Schema:   *snowflakeSchema,
 	}
-	// Now add either private key or password depending on flags
+
+	// Now add either private key, password, or external browser depending on flags
 	if *snowflakePassword != "" {
 		cfg.Authenticator = gosnowflake.AuthTypeSnowflake
 		cfg.Password = *snowflakePassword
-	} else {
+	} else if *snowflakePrivateKeyFile != "" {
 		cfg.Authenticator = gosnowflake.AuthTypeJwt
 		cfg.PrivateKey = rsaKey
+	} else if *snowflakeAuthenticator == "externalbrowser" {
+		cfg.Authenticator = gosnowflake.AuthTypeExternalBrowser
+	} else {
+		logger.Fatal("Invalid authenticator",
+			zap.String("authenticator", *snowflakeAuthenticator),
+		)
 	}
 
 	dsn, err := gosnowflake.DSN(&cfg)
