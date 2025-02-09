@@ -7,15 +7,15 @@ import (
 	"crypto/rsa"
 	"database/sql"
 	"flag"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/snowflakedb/gosnowflake"
 	"go.step.sm/crypto/pemutil"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -30,16 +30,14 @@ func main() {
 		snowflakeAuthenticator      = flag.String("snowflake.authenticator", "", "Authenticator type for snowflake (one of: externalbrowser)")
 	)
 
-	if err := ff.Parse(flag.CommandLine, os.Args[1:], ff.WithEnvVars()); err != nil {
-		log.Fatalf("Error parsing flags: %s", err)
-	}
+	// Setup zerolog
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	logger := log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	// Create a development logger with human-readable output
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		log.Fatalf("Failed to create logger: %v", err)
+
+	if err := ff.Parse(flag.CommandLine, os.Args[1:], ff.WithEnvVars()); err != nil {
+		log.Fatal().Err(err).Msg("Error parsing flags")
 	}
-	defer logger.Sync()
 
 	// Check flags
 	var missingFlags []string
@@ -65,20 +63,20 @@ func main() {
 		missingFlags = append(missingFlags, "authentication method (one of: snowflake.password, snowflake.private.key.file, or snowflake.authenticator)")
 	}
 	if authMethodCount > 1 {
-		logger.Fatal("Must provide exactly one authentication method",
-			zap.Bool("password_provided", *snowflakePassword != ""),
-			zap.Bool("private_key_provided", *snowflakePrivateKeyFile != ""),
-			zap.Bool("authenticator_provided", *snowflakeAuthenticator != ""),
-		)
+		logger.Fatal().
+			Bool("password_provided", *snowflakePassword != "").
+			Bool("private_key_provided", *snowflakePrivateKeyFile != "").
+			Bool("authenticator_provided", *snowflakeAuthenticator != "").
+			Msg("Must provide exactly one authentication method")
 	}
 
 	if len(missingFlags) > 0 {
-		logger.Fatal("Missing required flags: " + strings.Join(missingFlags, ", "))
+		logger.Fatal().Msg("Missing required flags: " + strings.Join(missingFlags, ", "))
 	}
 
 	// Create context that's cancelled when the program receives a SIGINT
 	ctx := context.Background()
-	ctx, cancel := signalHandlerContext(ctx, logger)
+	ctx, cancel := signalHandlerContext(ctx, &logger)
 	defer cancel()
 
 	// need to convert private key to correct format if provided
@@ -97,12 +95,12 @@ func main() {
 			pemutil.WithPassword([]byte(*snowflakePrivateKeyPasscode)),
 		)
 		if err != nil {
-			logger.Fatal("Failed parsing private key!", zap.Error(err))
+			logger.Fatal().Err(err).Msg("Failed parsing private key!")
 		}
 
 		rsaKey, ok = key.(*rsa.PrivateKey)
 		if !ok {
-			logger.Fatal("Type assertion to *rsa.PrivateKey failed!")
+			logger.Fatal().Msg("Type assertion to *rsa.PrivateKey failed!")
 		}
 	}
 
@@ -123,23 +121,19 @@ func main() {
 	} else if *snowflakeAuthenticator == "externalbrowser" {
 		cfg.Authenticator = gosnowflake.AuthTypeExternalBrowser
 	} else {
-		logger.Fatal("Invalid authenticator",
-			zap.String("authenticator", *snowflakeAuthenticator),
-		)
+		logger.Fatal().
+			Str("authenticator", *snowflakeAuthenticator).
+			Msg("Invalid authenticator")
 	}
 
 	dsn, err := gosnowflake.DSN(&cfg)
 	if err != nil {
-		logger.Fatal("Failed to create DSN from config",
-			zap.Error(err),
-		)
+		logger.Fatal().Err(err).Msg("Failed to create DSN from config")
 	}
 
 	db, err := sql.Open("snowflake", dsn)
 	if err != nil {
-		logger.Fatal("Error connecting to snowflake",
-			zap.Error(err),
-		)
+		logger.Fatal().Err(err).Msg("Error connecting to snowflake")
 	}
 	defer db.Close()
 
@@ -149,7 +143,7 @@ func main() {
 	`
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
-		logger.Fatal("Failed querying snowflake!", zap.Error(err))
+		logger.Fatal().Err(err).Msg("Failed querying snowflake!")
 	}
 	// Do whatever you want with rows, for this example we'll just loop over
 	// them and increment a count.
@@ -161,24 +155,23 @@ func main() {
 		if err := rows.Scan(
 			columns you want to scan
 		); err != nil {
-			logger.Fatal("Error scanning rows!", zap.Error(err))
+			logger.Fatal().Err(err).Msg("Error scanning rows!")
 		*/
 	}
 
 	if err := rows.Err(); err != nil {
-		logger.Fatal("Error calling rows.Err!", zap.Error(err))
+		logger.Fatal().Err(err).Msg("Error calling rows.Err!")
 	}
 
 	if err := rows.Close(); err != nil {
-		logger.Fatal("Error calling rows.Close!", zap.Error(err))
+		logger.Fatal().Err(err).Msg("Error calling rows.Close!")
 	}
 
 	// Log our count and exit
-	logger.Sugar().Infof("Successfully pulled %d results from snowflake", count)
-	return
+	logger.Info().Int("count", count).Msg("Successfully pulled results from snowflake")
 }
 
-func signalHandlerContext(ctx context.Context, logger *zap.Logger) (context.Context, func()) {
+func signalHandlerContext(ctx context.Context, logger *zerolog.Logger) (context.Context, func()) {
 	ctx, cancel := context.WithCancel(ctx)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt)
@@ -195,9 +188,9 @@ func signalHandlerContext(ctx context.Context, logger *zap.Logger) (context.Cont
 
 		select {
 		case sig := <-sigs:
-			logger.Info("Caught signal",
-				zap.Stringer("signal", sig),
-			)
+			logger.Info().
+				Str("signal", sig.String()).
+				Msg("Caught signal")
 			cancel()
 		case <-ctx.Done():
 		}
