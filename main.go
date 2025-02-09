@@ -25,6 +25,7 @@ func main() {
 		snowflakeSchema             = flag.String("snowflake.schema", "", "Schema name for snowflake")
 		snowflakeUser               = flag.String("snowflake.user", "", "Username for snowflake")
 		snowflakePassword           = flag.String("snowflake.password", "", "Password for snowflake. Cannot be used in conjunction with snowflake.private.key.file")
+		snowflakeRole               = flag.String("snowflake.role", "", "Role for snowflake")
 		snowflakePrivateKeyFile     = flag.String("snowflake.private.key.file", "", "Location of private key file used to authenticate with snowflake, pkcs8 in PEM format. Cannot be used in conjunction with snowflake.password")
 		snowflakePrivateKeyPasscode = flag.String("snowflake.private.key.passcode", "", "Passcode for encrypted private key (not necessary if key is not encrypted)")
 		snowflakeAuthenticator      = flag.String("snowflake.authenticator", "", "Authenticator type for snowflake (one of: externalbrowser)")
@@ -107,6 +108,7 @@ func main() {
 		User:     *snowflakeUser,
 		Database: *snowflakeDatabase,
 		Schema:   *snowflakeSchema,
+		Role:     *snowflakeRole,
 	}
 
 	// Now add either private key, password, or external browser depending on flags
