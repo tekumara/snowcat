@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"database/sql"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"os"
@@ -154,10 +155,14 @@ func main() {
 		log.Fatal().Err(err).Msg("Error getting column names!")
 	}
 
-	// Print header
-	log.Info().Msg("Results:")
-	log.Info().Msg(strings.Join(columns, " | "))
-	log.Info().Msg(strings.Repeat("-", len(strings.Join(columns, " | "))))
+	// Setup CSV writer
+	w := csv.NewWriter(os.Stdout)
+	defer w.Flush()
+
+	// Write header
+	if err := w.Write(columns); err != nil {
+		log.Fatal().Err(err).Msg("Error writing CSV header!")
+	}
 
 	// Create a slice of interface{} to store the row values
 	values := make([]interface{}, len(columns))
@@ -173,12 +178,16 @@ func main() {
 			log.Fatal().Err(err).Msg("Error scanning rows!")
 		}
 
-		// Convert values to strings and join with separator
+		// Convert values to strings
 		stringValues := make([]string, len(columns))
 		for i, v := range values {
 			stringValues[i] = fmt.Sprint(v)
 		}
-		log.Info().Msg(strings.Join(stringValues, " | "))
+
+		// Write CSV row
+		if err := w.Write(stringValues); err != nil {
+			log.Fatal().Err(err).Msg("Error writing CSV row!")
+		}
 		rowCount++
 	}
 
