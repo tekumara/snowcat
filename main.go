@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"database/sql"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
@@ -139,24 +140,46 @@ func main() {
 
 	// Now can use all standard *sql.DB methods to query snowflake
 	query := `
-		SELECT 1;
+		SELECT current_timestamp() as TIME, current_user() as USER, current_role() as ROLE;
 	`
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed querying snowflake!")
 	}
-	// Do whatever you want with rows, for this example we'll just loop over
-	// them and increment a count.
 	defer rows.Close()
-	count := 0
+
+	// Get column names
+	columns, err := rows.Columns()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error getting column names!")
+	}
+
+	// Print header
+	log.Info().Msg("Results:")
+	log.Info().Msg(strings.Join(columns, " | "))
+	log.Info().Msg(strings.Repeat("-", len(strings.Join(columns, " | "))))
+
+	// Create a slice of interface{} to store the row values
+	values := make([]interface{}, len(columns))
+	valuePtrs := make([]interface{}, len(columns))
+	for i := range values {
+		valuePtrs[i] = &values[i]
+	}
+
+	// Iterate through rows
+	rowCount := 0
 	for rows.Next() {
-		count++
-		/*normally you would scan the rows here
-		if err := rows.Scan(
-			columns you want to scan
-		); err != nil {
+		if err := rows.Scan(valuePtrs...); err != nil {
 			log.Fatal().Err(err).Msg("Error scanning rows!")
-		*/
+		}
+
+		// Convert values to strings and join with separator
+		stringValues := make([]string, len(columns))
+		for i, v := range values {
+			stringValues[i] = fmt.Sprint(v)
+		}
+		log.Info().Msg(strings.Join(stringValues, " | "))
+		rowCount++
 	}
 
 	if err := rows.Err(); err != nil {
@@ -167,8 +190,10 @@ func main() {
 		log.Fatal().Err(err).Msg("Error calling rows.Close!")
 	}
 
-	// Log our count and exit
-	log.Info().Int("count", count).Msg("Successfully pulled results from snowflake")
+	// Log our counts and exit
+	log.Info().
+		Int("rows", rowCount).
+		Msg("Successfully pulled results from snowflake")
 }
 
 func signalHandlerContext(ctx context.Context) (context.Context, func()) {
