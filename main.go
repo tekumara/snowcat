@@ -23,6 +23,9 @@ import (
 func main() {
 	var (
 		snowflakeAccount            = flag.String("snowflake.account", "", "Account name for snowflake. Account name is not the username, see https://docs.snowflake.com/en/user-guide/admin-account-identifier for more details")
+		snowflakeHost               = flag.String("snowflake.host", "", "Host name for snowflake (default: {account}.snowflakecomputing.com)")
+		snowflakePort               = flag.Int("snowflake.port", 443, "Port for snowflake connection")
+		snowflakeProtocol           = flag.String("snowflake.protocol", "https", "Protocol for snowflake connection (http or https)")
 		snowflakeDatabase           = flag.String("snowflake.database", "", "Database name for snowflake")
 		snowflakeSchema             = flag.String("snowflake.schema", "", "Schema name for snowflake")
 		snowflakeUser               = flag.String("snowflake.user", "", "Username for snowflake")
@@ -75,6 +78,11 @@ func main() {
 		log.Fatal().Msg("Missing required flags: " + strings.Join(missingFlags, ", "))
 	}
 
+	// Check protocol is valid
+	if *snowflakeProtocol != "https" && *snowflakeProtocol != "http" {
+		log.Fatal().Str("protocol", *snowflakeProtocol).Msg("Protocol must be either 'http' or 'https'")
+	}
+
 	// Create context that's cancelled when the program receives a SIGINT
 	ctx := context.Background()
 	ctx, cancel := signalHandlerContext(ctx)
@@ -111,6 +119,9 @@ func main() {
 		Database: *snowflakeDatabase,
 		Schema:   *snowflakeSchema,
 		Role:     *snowflakeRole,
+		Host:     *snowflakeHost,
+		Port:     *snowflakePort,
+		Protocol: *snowflakeProtocol,
 	}
 
 	// Now add either private key, password, or external browser depending on flags
