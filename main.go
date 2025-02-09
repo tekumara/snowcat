@@ -34,6 +34,7 @@ func main() {
 		snowflakePrivateKeyFile     = flag.String("snowflake.private.key.file", "", "Location of private key file used to authenticate with snowflake, pkcs8 in PEM format. Cannot be used in conjunction with snowflake.password")
 		snowflakePrivateKeyPasscode = flag.String("snowflake.private.key.passcode", "", "Passcode for encrypted private key (not necessary if key is not encrypted)")
 		snowflakeAuthenticator      = flag.String("snowflake.authenticator", "", "Authenticator type for snowflake (one of: externalbrowser)")
+		snowflakeMaxRetryCount      = flag.Int("snowflake.max.retry.count", 7, "Specifies maximum number of subsequent retries with backoff. Use -1 for no retries, as 0 means use the default.")
 	)
 
 	// Setup zerolog
@@ -114,14 +115,15 @@ func main() {
 	}
 
 	cfg := gosnowflake.Config{
-		Account:  *snowflakeAccount,
-		User:     *snowflakeUser,
-		Database: *snowflakeDatabase,
-		Schema:   *snowflakeSchema,
-		Role:     *snowflakeRole,
-		Host:     *snowflakeHost,
-		Port:     *snowflakePort,
-		Protocol: *snowflakeProtocol,
+		Account:       *snowflakeAccount,
+		User:          *snowflakeUser,
+		Database:      *snowflakeDatabase,
+		Schema:        *snowflakeSchema,
+		Role:          *snowflakeRole,
+		Host:          *snowflakeHost,
+		Port:          *snowflakePort,
+		Protocol:      *snowflakeProtocol,
+		MaxRetryCount: *snowflakeMaxRetryCount,
 	}
 
 	// Now add either private key, password, or external browser depending on flags
