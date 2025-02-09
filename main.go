@@ -151,9 +151,8 @@ func main() {
 	defer db.Close()
 
 	// Now can use all standard *sql.DB methods to query snowflake
-	query := `
-		SELECT current_timestamp() as TIME, current_user() as USER, current_role() as ROLE;
-	`
+	query := `SELECT current_timestamp() as TIME, current_user() as USER, current_role() as ROLE;`
+	log.Debug().Str("query", query).Msg("Querying snowflake")
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed querying snowflake!")
@@ -211,7 +210,7 @@ func main() {
 	}
 
 	// Log our counts and exit
-	log.Info().
+	log.Debug().
 		Int("rows", rowCount).
 		Msg("Successfully pulled results from snowflake")
 }
@@ -233,7 +232,7 @@ func signalHandlerContext(ctx context.Context) (context.Context, func()) {
 
 		select {
 		case sig := <-sigs:
-			log.Info().
+			log.Warn().
 				Str("signal", sig.String()).
 				Msg("Caught signal")
 			cancel()
