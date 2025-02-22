@@ -40,6 +40,8 @@ func main() {
 	// Setup zerolog
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
+	//_ = gosnowflake.GetLogger().SetLogLevel("debug")
+
 	if err := ff.Parse(flag.CommandLine, os.Args[1:], ff.WithEnvVars()); err != nil {
 		log.Fatal().Err(err).Msg("Error parsing flags")
 	}
@@ -145,6 +147,15 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create DSN from config")
 	}
+
+	// Log dsn with password stripped
+	dsnStr := dsn
+	if idx := strings.Index(dsnStr, "@"); idx != -1 {
+		if start := strings.Index(dsnStr, ":"); start != -1 && start < idx {
+			dsnStr = dsnStr[:start+1] + "***" + dsnStr[idx:]
+		}
+	}
+	log.Debug().Str("dsn", dsnStr).Msg("Connecting to Snowflake")
 
 	db, err := sql.Open("snowflake", dsn)
 	if err != nil {
