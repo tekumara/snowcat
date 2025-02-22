@@ -23,6 +23,13 @@ import (
 const defaultQuery = `SELECT current_timestamp() as TIME, current_user() as USER, current_role() as ROLE;`
 
 func main() {
+	// Setup custom usage
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "A very basic Snowflake query CLI.\n\n")
+		fmt.Fprintf(os.Stderr, "Usage of snowcat:\n")
+		flag.PrintDefaults()
+	}
+
 	var (
 		snowflakeAccount            = flag.String("snowflake.account", "", "Account name for snowflake. Account name is not the username, see https://docs.snowflake.com/en/user-guide/admin-account-identifier for more details")
 		snowflakeHost               = flag.String("snowflake.host", "", "Host name for snowflake (default: {account}.snowflakecomputing.com)")
