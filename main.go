@@ -20,6 +20,8 @@ import (
 	"go.step.sm/crypto/pemutil"
 )
 
+const defaultQuery = `SELECT current_timestamp() as TIME, current_user() as USER, current_role() as ROLE;`
+
 func main() {
 	var (
 		snowflakeAccount            = flag.String("snowflake.account", "", "Account name for snowflake. Account name is not the username, see https://docs.snowflake.com/en/user-guide/admin-account-identifier for more details")
@@ -35,6 +37,7 @@ func main() {
 		snowflakePrivateKeyPasscode = flag.String("snowflake.private.key.passcode", "", "Passcode for encrypted private key (not necessary if key is not encrypted)")
 		snowflakeAuthenticator      = flag.String("snowflake.authenticator", "", "Authenticator type for snowflake (one of: externalbrowser)")
 		snowflakeMaxRetryCount      = flag.Int("snowflake.max.retry.count", 7, "Specifies maximum number of subsequent retries with backoff. Use -1 for no retries, as 0 means use the default.")
+		query                       = flag.String("query", defaultQuery, "SQL query to execute")
 	)
 
 	// Setup zerolog
@@ -164,9 +167,8 @@ func main() {
 	defer db.Close()
 
 	// Now can use all standard *sql.DB methods to query snowflake
-	query := `SELECT current_timestamp() as TIME, current_user() as USER, current_role() as ROLE;`
-	log.Debug().Str("query", query).Msg("Querying snowflake")
-	rows, err := db.QueryContext(ctx, query)
+	log.Debug().Str("query", *query).Msg("Querying snowflake")
+	rows, err := db.QueryContext(ctx, *query)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed querying snowflake!")
 	}
